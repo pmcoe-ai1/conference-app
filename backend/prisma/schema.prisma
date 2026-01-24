@@ -1,0 +1,168 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ConferenceStatus {
+  draft
+  active
+  archived
+}
+
+enum AttendeeStatus {
+  first_login
+  active
+  locked
+}
+
+enum SurveyStatus {
+  draft
+  active
+  inactive
+}
+
+enum QuestionType {
+  single_choice
+  multi_choice
+  rating
+  numeric_range
+  text_short
+  text_long
+}
+
+enum PasswordQueueStatus {
+  pending
+  sent
+  failed
+}
+
+model Admin {
+  id           String       @id @default(uuid())
+  email        String       @unique
+  passwordHash String       @map("password_hash")
+  name         String?
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @updatedAt @map("updated_at")
+  conferences  Conference[]
+
+  @@map("admins")
+}
+
+model Conference {
+  id          String           @id @default(uuid())
+  name        String           @db.VarChar(255)
+  urlCode     String           @unique @map("url_code") @db.VarChar(50)
+  description String?          @db.Text
+  startDate   DateTime         @map("start_date") @db.Date
+  endDate     DateTime         @map("end_date") @db.Date
+  status      ConferenceStatus @default(draft)
+  adminId     String           @map("admin_id")
+  qrCodeUrl   String?          @map("qr_code_url") @db.VarChar(500)
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+
+  admin     Admin      @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  attendees Attendee[]
+  surveys   Survey[]
+
+  @@map("conferences")
+}
+
+model Attendee {
+  id             String         @id @default(uuid())
+  conferenceId   String         @map("conference_id")
+  email          String         @db.VarChar(255)
+  passwordHash   String?        @map("password_hash") @db.VarChar(255)
+  status         AttendeeStatus @default(first_login)
+  firstLoginAt   DateTime?      @map("first_login_at")
+  lastLoginAt    DateTime?      @map("last_login_at")
+  failedAttempts Int            @default(0) @map("failed_attempts")
+  lockedUntil    DateTime?      @map("locked_until")
+  createdAt      DateTime       @default(now()) @map("created_at")
+
+  conference    Conference     @relation(fields: [conferenceId], references: [id], onDelete: Cascade)
+  responses     Response[]
+  passwordQueue PasswordQueue?
+
+  @@unique([conferenceId, email])
+  @@map("attendees")
+}
+
+model Survey {
+  id             String       @id @default(uuid())
+  conferenceId   String       @map("conference_id")
+  title          String       @db.VarChar(255)
+  description    String?      @db.Text
+  status         SurveyStatus @default(draft)
+  sortOrder      Int          @default(0) @map("sort_order")
+  scheduledStart DateTime?    @map("scheduled_start")
+  scheduledEnd   DateTime?    @map("scheduled_end")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+
+  conference Conference @relation(fields: [conferenceId], references: [id], onDelete: Cascade)
+  questions  Question[]
+
+  @@map("surveys")
+}
+
+model Question {
+  id        String       @id @default(uuid())
+  surveyId  String       @map("survey_id")
+  text      String       @db.Text
+  type      QuestionType
+  options   Json?
+  isRequired Boolean     @default(false) @map("is_required")
+  helpText  String?      @map("help_text") @db.Text
+  sortOrder Int          @default(0) @map("sort_order")
+  createdAt DateTime     @default(now()) @map("created_at")
+
+  survey    Survey     @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+  responses Response[]
+
+  @@map("questions")
+}
+
+model Response {
+  id          String   @id @default(uuid())
+  questionId  String   @map("question_id")
+  attendeeId  String   @map("attendee_id")
+  answer      Json
+  submittedAt DateTime @default(now()) @map("submitted_at")
+
+  question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  attendee Attendee @relation(fields: [attendeeId], references: [id], onDelete: Cascade)
+
+  @@unique([questionId, attendeeId])
+  @@map("responses")
+}
+
+model PasswordQueue {
+  id           String              @id @default(uuid())
+  attendeeId   String              @unique @map("attendee_id")
+  scheduledAt  DateTime            @map("scheduled_at")
+  status       PasswordQueueStatus @default(pending)
+  attempts     Int                 @default(0)
+  sentAt       DateTime?           @map("sent_at")
+  errorMessage String?             @map("error_message") @db.Text
+  createdAt    DateTime            @default(now()) @map("created_at")
+
+  attendee Attendee @relation(fields: [attendeeId], references: [id], onDelete: Cascade)
+
+  @@map("password_queue")
+}
+
+model PasswordReset {
+  id        String   @id @default(uuid())
+  email     String
+  token     String   @unique
+  expiresAt DateTime @map("expires_at")
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("password_resets")
+}
