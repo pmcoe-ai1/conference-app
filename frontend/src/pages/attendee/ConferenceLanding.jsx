@@ -1,88 +1,252 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Mail, Lock, Eye, EyeOff, ChevronRight, AlertCircle, FileText, Loader2 } from 'lucide-react';
-import { conferenceAPI, authAPI } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
+import { conferenceAPI, authAPI } from '../../services/api';
+import { Button, Input, Card, Spinner } from '../../components/ui';
+import { Calendar, Users, Mail, Lock, User } from 'lucide-react';
 
 export default function ConferenceLanding() {
   const { code } = useParams();
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { login, isAuthenticated, isAttendee } = useAuth();
   const toast = useToast();
-
+  
   const [conference, setConference] = useState(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState('');
-  const [mode, setMode] = useState('first');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
+  const [mode, setMode] = useState('register'); // 'register' or 'login'
+  
+  const [formData, setFormData] = useState({
+    email: '',
+    firstName: '',
+    lastName: '',
+    password: ''
+  });
 
-  useEffect(() => { loadConference(); }, [code]);
+  useEffect(() => {
+    loadConference();
+  }, [code]);
+
+  useEffect(() => {
+    if (isAuthenticated && isAttendee) {
+      navigate(`/c/${code}/survey`);
+    }
+  }, [isAuthenticated, isAttendee]);
 
   const loadConference = async () => {
     try {
       const { data } = await conferenceAPI.getByCode(code);
       setConference(data);
-      if (data.status !== 'active') setError('This conference is not currently active.');
     } catch (err) {
-      setError('Conference not found. Please check the QR code.');
+      toast.error('Conference not found');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSubmit = async (e) => {
+  const handleRegister = async (e) => {
     e.preventDefault();
-    setError('');
-    if (!email || !email.includes('@')) { setError('Please enter a valid email address'); return; }
-    if (mode === 'return' && !password) { setError('Password is required'); return; }
+    if (!formData.email || !formData.firstName || !formData.lastName) {
+      toast.error('Please fill in all fields');
+      return;
+    }
+    
     setSubmitting(true);
     try {
-      const response = mode === 'first' 
-        ? await authAPI.firstLogin(email, code)
-        : await authAPI.attendeeLogin(email, password, code);
-      const { token, attendee, conference: conf } = response.data;
-      login({ ...attendee, type: 'attendee', conference: conf }, token);
-      toast.success(`Welcome to ${conf.name}!`);
+      const { data } = await authAPI.firstLogin(
+        formData.email, 
+        formData.firstName,
+        formData.lastName,
+        code
+      );
+      
+      login({
+        id: data.attendee.id,
+        email: data.attendee.email,
+        firstName: data.attendee.firstName,
+        lastName: data.attendee.lastName,
+        type: 'attendee',
+        conferenceId: data.conference.id
+      }, data.token);
+      
+      if (data.generatedPassword) {
+        toast.success(`Your password is: ${data.generatedPassword}`, 10000);
+      }
+      
       navigate(`/c/${code}/survey`);
     } catch (err) {
-      const errorData = err.response?.data;
-      if (errorData?.requiresPassword) { setMode('return'); setError('This email is already registered. Please enter your password.'); }
-      else setError(errorData?.error || 'Login failed. Please try again.');
+      if (err.response?.data?.requiresPassword) {
+        setMode('login');
+        toast.info('You are already registered. Please login.');
+      } else {
+        toast.error(err.response?.data?.error || 'Registration failed');
+      }
     } finally {
       setSubmitting(false);
     }
   };
 
-  if (loading) return <div className="min-h-screen bg-gradient-to-br from-indigo-900 via-purple-900 to-indigo-800 flex items-center justify-center"><Loader2 className="w-8 h-8 text-white animate-spin" /></div>;
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    if (!formData.email || !formData.password) {
+      toast.error('Please enter email and password');
+      return;
+    }
+    
+    setSubmitting(true);
+    try {
+      const { data } = await authAPI.attendeeLogin(formData.email, formData.password, code);
+      
+      login({
+        id: data.attendee.id,
+        email: data.attendee.email,
+        firstName: data.attendee.firstName,
+        lastName: data.attendee.lastName,
+        type: 'attendee',
+        conferenceId: data.conference.id
+      }, data.token);
+      
+      navigate(`/c/${code}/survey`);
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Login failed');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center">
+        <Spinner size="lg" />
+      </div>
+    );
+  }
+
+  if (!conference) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center">
+        <Card className="p-8 text-center max-w-md">
+          <h1 className="text-2xl font-bold text-white mb-4">Conference Not Found</h1>
+          <p className="text-slate-400">The conference code "{code}" does not exist.</p>
+        </Card>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-900 via-purple-900 to-indigo-800 flex items-center justify-center p-4">
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-purple-500/20 rounded-full blur-3xl" />
-        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-indigo-500/20 rounded-full blur-3xl" />
-      </div>
-      <div className="relative w-full max-w-md">
-        <div className="bg-white/10 backdrop-blur-xl rounded-3xl p-8 shadow-2xl border border-white/20">
-          <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-white/20 rounded-2xl mb-4"><FileText className="w-8 h-8 text-white" /></div>
-            {conference ? (<><h1 className="text-2xl font-bold text-white mb-2">{conference.name}</h1><p className="text-purple-200 text-sm">{mode === 'return' ? 'Welcome back! Enter your credentials.' : 'Enter your email to get started.'}</p></>) : <h1 className="text-2xl font-bold text-white mb-2">Conference Not Found</h1>}
+    <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
+      <Card className="w-full max-w-md p-8">
+        <div className="text-center mb-8">
+          <h1 className="text-2xl font-bold text-white mb-2">{conference.name}</h1>
+          {conference.description && (
+            <p className="text-slate-400 text-sm mb-4">{conference.description}</p>
+          )}
+          <div className="flex items-center justify-center gap-4 text-sm text-slate-500">
+            <span className="flex items-center gap-1">
+              <Calendar size={14} />
+              {new Date(conference.startDate).toLocaleDateString()}
+            </span>
           </div>
-          {conference && conference.status === 'active' ? (
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div><label className="block text-sm font-medium text-purple-200 mb-2">Email Address</label><div className="relative"><Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-purple-300" /><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full pl-11 pr-4 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-purple-300 focus:outline-none focus:ring-2 focus:ring-purple-400" placeholder="you@example.com" /></div></div>
-              {mode === 'return' && (<div><label className="block text-sm font-medium text-purple-200 mb-2">Password</label><div className="relative"><Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-purple-300" /><input type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} className="w-full pl-11 pr-12 py-3 bg-white/10 border border-white/20 rounded-xl text-white placeholder-purple-300 focus:outline-none focus:ring-2 focus:ring-purple-400" placeholder="Enter your password" /><button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-purple-300 hover:text-white">{showPassword ? <EyeOff size={20} /> : <Eye size={20} />}</button></div><button type="button" onClick={() => navigate(`/c/${code}/forgot-password`)} className="text-sm text-purple-300 hover:text-white mt-2">Forgot password?</button></div>)}
-              {error && <div className="flex items-center gap-2 text-red-300 text-sm bg-red-500/20 px-4 py-3 rounded-lg"><AlertCircle size={18} /><span>{error}</span></div>}
-              <button type="submit" disabled={submitting} className="w-full py-3 bg-white text-indigo-900 font-semibold rounded-xl hover:bg-purple-100 transition-all disabled:opacity-50 flex items-center justify-center gap-2">{submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <>{mode === 'return' ? 'Sign In' : 'Continue'}<ChevronRight size={18} /></>}</button>
-            </form>
-          ) : <div className="text-center"><div className="bg-red-500/20 text-red-300 px-4 py-3 rounded-lg">{error || 'This conference is not available.'}</div></div>}
-          {conference && conference.status === 'active' && <div className="mt-6 text-center"><button onClick={() => { setMode(mode === 'first' ? 'return' : 'first'); setError(''); setPassword(''); }} className="text-sm text-purple-300 hover:text-white">{mode === 'return' ? 'First time here? Register with email' : 'Already registered? Sign in'}</button></div>}
         </div>
-        <p className="text-center text-purple-300/60 text-xs mt-6">By continuing, you agree to our Privacy Policy</p>
-      </div>
+
+        {mode === 'register' ? (
+          <form onSubmit={handleRegister} className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="relative">
+                <User className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                <input
+                  type="text"
+                  placeholder="First Name"
+                  value={formData.firstName}
+                  onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+                  className="w-full pl-10 pr-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  required
+                />
+              </div>
+              <div className="relative">
+                <User className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                <input
+                  type="text"
+                  placeholder="Last Name"
+                  value={formData.lastName}
+                  onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
+                  className="w-full pl-10 pr-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  required
+                />
+              </div>
+            </div>
+            
+            <div className="relative">
+              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+              <input
+                type="email"
+                placeholder="Email Address"
+                value={formData.email}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                className="w-full pl-10 pr-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                required
+              />
+            </div>
+            
+            <Button type="submit" className="w-full" loading={submitting}>
+              Join Conference
+            </Button>
+            
+            <p className="text-center text-sm text-slate-400">
+              Already registered?{' '}
+              <button
+                type="button"
+                onClick={() => setMode('login')}
+                className="text-indigo-400 hover:text-indigo-300"
+              >
+                Sign in
+              </button>
+            </p>
+          </form>
+        ) : (
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div className="relative">
+              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+              <input
+                type="email"
+                placeholder="Email Address"
+                value={formData.email}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                className="w-full pl-10 pr-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                required
+              />
+            </div>
+            
+            <div className="relative">
+              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+              <input
+                type="password"
+                placeholder="Password"
+                value={formData.password}
+                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                className="w-full pl-10 pr-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                required
+              />
+            </div>
+            
+            <Button type="submit" className="w-full" loading={submitting}>
+              Sign In
+            </Button>
+            
+            <p className="text-center text-sm text-slate-400">
+              New attendee?{' '}
+              <button
+                type="button"
+                onClick={() => setMode('register')}
+                className="text-indigo-400 hover:text-indigo-300"
+              >
+                Register
+              </button>
+            </p>
+          </form>
+        )}
+      </Card>
     </div>
   );
 }

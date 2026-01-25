@@ -47,7 +47,7 @@ export default function AttendeesPage() {
   };
 
   const handleDelete = async (attendee) => {
-    if (!confirm(`Remove ${attendee.email}? This will delete all their responses.`)) return;
+    if (!confirm(`Remove ${attendee.firstName} ${attendee.lastName} (${attendee.email})? This will delete all their responses.`)) return;
     try {
       await attendeeAPI.delete(attendee.id);
       toast.success('Attendee removed');
@@ -65,6 +65,13 @@ export default function AttendeesPage() {
       a.click();
       toast.success('List downloaded');
     } catch (err) { toast.error('Download failed'); }
+  };
+
+  const formatName = (attendee) => {
+    if (attendee.firstName && attendee.lastName) {
+      return `${attendee.firstName} ${attendee.lastName}`;
+    }
+    return '-';
   };
 
   if (loading) return <div className="flex-1 flex items-center justify-center p-6"><Loader2 className="w-8 h-8 text-indigo-500 animate-spin" /></div>;
@@ -86,7 +93,7 @@ export default function AttendeesPage() {
         </Select>
         <div className="flex-1 relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-          <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by email..." className="w-full pl-10 pr-4 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-400 focus:ring-2 focus:ring-indigo-500" />
+          <input type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by name or email..." className="w-full pl-10 pr-4 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-400 focus:ring-2 focus:ring-indigo-500" />
         </div>
         <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="w-48">
           <option value="all">All Statuses</option>
@@ -104,10 +111,10 @@ export default function AttendeesPage() {
           <table className="w-full">
             <thead>
               <tr className="border-b border-slate-700 bg-slate-800/50">
+                <th className="text-left px-4 py-3 text-sm font-medium text-slate-400">Name</th>
                 <th className="text-left px-4 py-3 text-sm font-medium text-slate-400">Email</th>
                 <th className="text-left px-4 py-3 text-sm font-medium text-slate-400">Status</th>
                 <th className="text-left px-4 py-3 text-sm font-medium text-slate-400">First Login</th>
-                <th className="text-left px-4 py-3 text-sm font-medium text-slate-400">Last Login</th>
                 <th className="text-left px-4 py-3 text-sm font-medium text-slate-400">Responses</th>
                 <th className="text-right px-4 py-3 text-sm font-medium text-slate-400">Actions</th>
               </tr>
@@ -115,10 +122,10 @@ export default function AttendeesPage() {
             <tbody>
               {attendees.map((attendee) => (
                 <tr key={attendee.id} className="border-b border-slate-700/50 hover:bg-slate-800/30">
-                  <td className="px-4 py-3 text-white">{attendee.email}</td>
+                  <td className="px-4 py-3 text-white font-medium">{formatName(attendee)}</td>
+                  <td className="px-4 py-3 text-slate-300">{attendee.email}</td>
                   <td className="px-4 py-3"><StatusBadge status={attendee.status} /></td>
                   <td className="px-4 py-3 text-slate-400 text-sm">{attendee.firstLoginAt ? new Date(attendee.firstLoginAt).toLocaleDateString() : '-'}</td>
-                  <td className="px-4 py-3 text-slate-400 text-sm">{attendee.lastLoginAt ? new Date(attendee.lastLoginAt).toLocaleDateString() : '-'}</td>
                   <td className="px-4 py-3 text-white">{attendee.responseCount || 0}</td>
                   <td className="px-4 py-3 text-right">
                     <div className="flex justify-end gap-1">
@@ -149,6 +156,10 @@ export default function AttendeesPage() {
       <Modal isOpen={!!selectedAttendee} onClose={() => setSelectedAttendee(null)} title="Attendee Details">
         {selectedAttendee && (
           <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div><label className="text-sm text-slate-400">First Name</label><p className="text-white">{selectedAttendee.firstName || '-'}</p></div>
+              <div><label className="text-sm text-slate-400">Last Name</label><p className="text-white">{selectedAttendee.lastName || '-'}</p></div>
+            </div>
             <div><label className="text-sm text-slate-400">Email</label><p className="text-white">{selectedAttendee.email}</p></div>
             <div><label className="text-sm text-slate-400">Status</label><div className="mt-1"><StatusBadge status={selectedAttendee.status} /></div></div>
             <div className="grid grid-cols-2 gap-4">

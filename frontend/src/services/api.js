@@ -7,12 +7,16 @@ const api = axios.create({
   headers: { 'Content-Type': 'application/json' }
 });
 
+// Add auth token to requests
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token');
-  if (token) config.headers.Authorization = `Bearer ${token}`;
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
   return config;
 });
 
+// Handle auth errors
 api.interceptors.response.use(
   (response) => response,
   (error) => {
@@ -24,28 +28,30 @@ api.interceptors.response.use(
   }
 );
 
+// Auth APIs
 export const authAPI = {
-  firstLogin: (email, conferenceCode) => api.post('/auth/attendee/first-login', { email, conferenceCode }),
-  attendeeLogin: (email, password, conferenceCode) => api.post('/auth/attendee/login', { email, password, conferenceCode }),
-  forgotPassword: (email, conferenceCode) => api.post('/auth/attendee/forgot-password', { email, conferenceCode }),
-  resetPassword: (token, newPassword, conferenceCode) => api.post('/auth/attendee/reset-password', { token, newPassword, conferenceCode }),
-  adminLogin: (email, password) => api.post('/auth/admin/login', { email, password }),
-  adminRegister: (email, password, name) => api.post('/auth/admin/register', { email, password, name })
+  firstLogin: (email, firstName, lastName, conferenceCode) => 
+    api.post('/auth/attendee/first-login', { email, firstName, lastName, conferenceCode }),
+  attendeeLogin: (email, password, conferenceCode) => 
+    api.post('/auth/attendee/login', { email, password, conferenceCode }),
+  adminLogin: (email, password) => 
+    api.post('/auth/admin/login', { email, password })
 };
 
+// Conference APIs
 export const conferenceAPI = {
   list: () => api.get('/conferences'),
   create: (data) => api.post('/conferences', data),
   get: (id) => api.get(`/conferences/${id}`),
-  update: (id, data) => api.put(`/conferences/${id}`, data),
-  archive: (id) => api.delete(`/conferences/${id}`),
-  activate: (id) => api.post(`/conferences/${id}/activate`),
   getByCode: (code) => api.get(`/conferences/by-code/${code}`),
-  regenerateQR: (id) => api.post(`/conferences/${id}/qr-code`),
+  update: (id, data) => api.put(`/conferences/${id}`, data),
+  activate: (id) => api.post(`/conferences/${id}/activate`),
+  delete: (id) => api.delete(`/conferences/${id}`),
   downloadQRPng: (id) => api.get(`/conferences/${id}/qr-code/png`, { responseType: 'blob' }),
   downloadQRSvg: (id) => api.get(`/conferences/${id}/qr-code/svg`, { responseType: 'blob' })
 };
 
+// Survey APIs
 export const surveyAPI = {
   listByConference: (conferenceId) => api.get(`/surveys/conference/${conferenceId}`),
   getActive: () => api.get('/surveys/active'),
@@ -57,6 +63,7 @@ export const surveyAPI = {
   delete: (id) => api.delete(`/surveys/${id}`)
 };
 
+// Question APIs
 export const questionAPI = {
   listBySurvey: (surveyId) => api.get(`/questions/survey/${surveyId}`),
   create: (data) => api.post('/questions', data),
@@ -65,26 +72,28 @@ export const questionAPI = {
   delete: (id) => api.delete(`/questions/${id}`)
 };
 
+// Response APIs
 export const responseAPI = {
   submit: (surveyId, responses) => api.post(`/responses/survey/${surveyId}`, { responses }),
   getBySurvey: (surveyId) => api.get(`/responses/survey/${surveyId}`),
-  getByAttendee: (attendeeId) => api.get(`/responses/attendee/${attendeeId}`)
+  getMyResponses: () => api.get('/responses/attendee')
 };
 
+// Statistics APIs
 export const statisticsAPI = {
   getSurveyStats: (surveyId) => api.get(`/statistics/survey/${surveyId}`),
-  getQuestionStats: (questionId) => api.get(`/statistics/question/${questionId}`),
   getConferenceSummary: (conferenceId) => api.get(`/statistics/conference/${conferenceId}/summary`)
 };
 
+// Attendee APIs
 export const attendeeAPI = {
-  listByConference: (conferenceId, params = {}) => api.get(`/attendees/conference/${conferenceId}`, { params }),
-  get: (id) => api.get(`/attendees/${id}`),
+  listByConference: (conferenceId, params = {}) => 
+    api.get(`/attendees/conference/${conferenceId}`, { params }),
   unlock: (id) => api.put(`/attendees/${id}/unlock`),
-  delete: (id) => api.delete(`/attendees/${id}`),
-  getNonResponders: (conferenceId) => api.get(`/attendees/conference/${conferenceId}/non-responders`)
+  delete: (id) => api.delete(`/attendees/${id}`)
 };
 
+// Export APIs
 export const exportAPI = {
   surveyCSV: (surveyId) => api.get(`/export/survey/${surveyId}/csv`, { responseType: 'blob' }),
   surveyPDF: (surveyId) => api.get(`/export/survey/${surveyId}/pdf`, { responseType: 'blob' }),
