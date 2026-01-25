@@ -1,11 +1,9 @@
 const { validationResult, body, param, query } = require('express-validator');
 
-/**
- * Validation error handler
- */
 function handleValidationErrors(req, res, next) {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
+    console.log('Validation errors:', errors.array());
     return res.status(400).json({ 
       error: 'Validation failed',
       details: errors.array().map(e => ({ field: e.path, message: e.msg }))
@@ -14,74 +12,54 @@ function handleValidationErrors(req, res, next) {
   next();
 }
 
-// Email validation
 const validateEmail = body('email')
   .isEmail()
   .withMessage('Please enter a valid email address')
-  .normalizeEmail()
-  .isLength({ max: 255 })
-  .withMessage('Email must be less than 255 characters');
+  .normalizeEmail();
 
-// Password validation
 const validatePassword = body('password')
   .isLength({ min: 8 })
   .withMessage('Password must be at least 8 characters');
 
-// Conference code validation
 const validateConferenceCode = [
   param('code')
-    .matches(/^[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9]$/)
-    .withMessage('Invalid conference code format')
     .isLength({ min: 3, max: 50 })
     .withMessage('Conference code must be 3-50 characters')
 ];
 
-// Conference creation validation
 const validateConference = [
   body('name')
     .trim()
     .notEmpty()
-    .withMessage('Conference name is required')
-    .isLength({ max: 255 })
-    .withMessage('Conference name must be less than 255 characters'),
+    .withMessage('Conference name is required'),
   body('urlCode')
-    .optional()
-    .matches(/^[a-zA-Z0-9][a-zA-Z0-9-]*[a-zA-Z0-9]$/)
-    .withMessage('URL code can only contain letters, numbers, and hyphens')
-    .isLength({ min: 3, max: 50 })
-    .withMessage('URL code must be 3-50 characters'),
+    .optional({ checkFalsy: true }),
   body('description')
-    .optional()
-    .trim(),
+    .optional({ checkFalsy: true }),
   body('startDate')
-    .isISO8601()
-    .withMessage('Start date must be a valid date'),
+    .notEmpty()
+    .withMessage('Start date is required'),
   body('endDate')
-    .isISO8601()
-    .withMessage('End date must be a valid date')
-    .custom((value, { req }) => {
-      if (new Date(value) < new Date(req.body.startDate)) {
-        throw new Error('End date must be after start date');
-      }
-      return true;
-    })
+    .notEmpty()
+    .withMessage('End date is required')
 ];
 
-// Survey validation
 const validateSurvey = [
   body('title')
     .trim()
     .notEmpty()
-    .withMessage('Survey title is required')
-    .isLength({ max: 255 })
-    .withMessage('Survey title must be less than 255 characters'),
+    .withMessage('Survey title is required'),
+  body('conferenceId')
+    .notEmpty()
+    .withMessage('Conference ID is required'),
   body('description')
-    .optional()
-    .trim()
+    .optional({ checkFalsy: true })
 ];
 
-// Question validation
 const validateQuestion = [
+  body('surveyId')
+    .notEmpty()
+    .withMessage('Survey ID is required'),
   body('text')
     .trim()
     .notEmpty()
@@ -91,28 +69,20 @@ const validateQuestion = [
     .withMessage('Invalid question type'),
   body('isRequired')
     .optional()
-    .isBoolean()
-    .withMessage('isRequired must be a boolean'),
+    .isBoolean(),
   body('options')
     .optional()
-    .isObject()
-    .withMessage('Options must be an object')
 ];
 
-// Response validation
 const validateResponse = [
   body('responses')
     .isArray()
     .withMessage('Responses must be an array'),
   body('responses.*.questionId')
     .isUUID()
-    .withMessage('Invalid question ID'),
-  body('responses.*.answer')
-    .notEmpty()
-    .withMessage('Answer is required')
+    .withMessage('Invalid question ID')
 ];
 
-// UUID param validation
 const validateUUID = (paramName) => [
   param(paramName)
     .isUUID()
