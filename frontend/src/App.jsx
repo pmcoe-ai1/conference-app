@@ -1,7 +1,8 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, NavLink as RouterNavLink } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
+import { Home, FileText, BarChart3, Users, Monitor, LogOut } from 'lucide-react';
 
 // Admin Pages
 import AdminLogin from './pages/admin/AdminLogin';
@@ -39,6 +40,13 @@ function AttendeeRoute({ children }) {
 function AdminLayout({ children }) {
   const { user, logout } = useAuth();
   
+  const navItems = [
+    { to: '/admin/dashboard', icon: Home, label: 'Dashboard' },
+    { to: '/admin/surveys', icon: FileText, label: 'Surveys' },
+    { to: '/admin/statistics', icon: BarChart3, label: 'Statistics' },
+    { to: '/admin/attendees', icon: Users, label: 'Attendees' },
+  ];
+  
   return (
     <div className="min-h-screen bg-slate-900 flex">
       {/* Sidebar */}
@@ -48,16 +56,29 @@ function AdminLayout({ children }) {
           <p className="text-sm text-slate-400 truncate">{user?.email}</p>
         </div>
         <nav className="flex-1 p-4 space-y-1">
-          <NavLink to="/admin/dashboard">Dashboard</NavLink>
-          <NavLink to="/admin/surveys">Surveys</NavLink>
-          <NavLink to="/admin/statistics">Statistics</NavLink>
-          <NavLink to="/admin/attendees">Attendees</NavLink>
+          {navItems.map(({ to, icon: Icon, label }) => (
+            <RouterNavLink
+              key={to}
+              to={to}
+              className={({ isActive }) =>
+                `flex items-center gap-3 px-4 py-2.5 rounded-lg transition-colors ${
+                  isActive
+                    ? 'bg-indigo-600 text-white'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-700'
+                }`
+              }
+            >
+              <Icon size={18} />
+              {label}
+            </RouterNavLink>
+          ))}
         </nav>
         <div className="p-4 border-t border-slate-700">
           <button 
             onClick={logout}
-            className="w-full px-4 py-2 text-sm text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors"
+            className="w-full flex items-center gap-3 px-4 py-2.5 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors"
           >
+            <LogOut size={18} />
             Sign Out
           </button>
         </div>
@@ -67,22 +88,6 @@ function AdminLayout({ children }) {
         {children}
       </div>
     </div>
-  );
-}
-
-function NavLink({ to, children }) {
-  const isActive = window.location.pathname === to;
-  return (
-    <a 
-      href={to}
-      className={`block px-4 py-2 rounded-lg transition-colors ${
-        isActive 
-          ? 'bg-indigo-600 text-white' 
-          : 'text-slate-400 hover:text-white hover:bg-slate-700'
-      }`}
-    >
-      {children}
-    </a>
   );
 }
 
