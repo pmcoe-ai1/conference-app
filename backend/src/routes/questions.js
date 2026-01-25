@@ -7,18 +7,25 @@ const { handleValidationErrors, validateQuestion, validateUUID } = require('../m
 const prisma = new PrismaClient();
 
 // Get all questions for a survey
-router.get('/survey/:surveyId', authenticateAdmin, validateUUID('surveyId'), handleValidationErrors, async (req, res) => {
+router.get('/survey/:surveyId', authenticateAdmin, async (req, res) => {
   try {
+    const { surveyId } = req.params;
+    
     const survey = await prisma.survey.findUnique({
-      where: { id: req.params.surveyId },
+      where: { id: surveyId },
       include: { conference: { select: { adminId: true } } }
     });
     
-    if (!survey) return res.status(404).json({ error: 'Survey not found' });
-    if (survey.conference.adminId !== req.adminId) return res.status(403).json({ error: 'Access denied' });
+    if (!survey) {
+      return res.status(404).json({ error: 'Survey not found' });
+    }
+    
+    if (survey.conference.adminId !== req.adminId) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
     
     const questions = await prisma.question.findMany({
-      where: { surveyId: req.params.surveyId },
+      where: { surveyId },
       orderBy: { sortOrder: 'asc' }
     });
     
@@ -39,8 +46,13 @@ router.post('/', authenticateAdmin, validateQuestion, handleValidationErrors, as
       include: { conference: { select: { adminId: true } } }
     });
     
-    if (!survey) return res.status(404).json({ error: 'Survey not found' });
-    if (survey.conference.adminId !== req.adminId) return res.status(403).json({ error: 'Access denied' });
+    if (!survey) {
+      return res.status(404).json({ error: 'Survey not found' });
+    }
+    
+    if (survey.conference.adminId !== req.adminId) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
     
     const maxSort = await prisma.question.aggregate({
       where: { surveyId },
@@ -67,7 +79,7 @@ router.post('/', authenticateAdmin, validateQuestion, handleValidationErrors, as
 });
 
 // Update a question
-router.put('/:id', authenticateAdmin, validateUUID('id'), handleValidationErrors, async (req, res) => {
+router.put('/:id', authenticateAdmin, async (req, res) => {
   try {
     const { text, type, options, isRequired, helpText, sortOrder } = req.body;
     
@@ -76,8 +88,13 @@ router.put('/:id', authenticateAdmin, validateUUID('id'), handleValidationErrors
       include: { survey: { include: { conference: { select: { adminId: true } } } } }
     });
     
-    if (!question) return res.status(404).json({ error: 'Question not found' });
-    if (question.survey.conference.adminId !== req.adminId) return res.status(403).json({ error: 'Access denied' });
+    if (!question) {
+      return res.status(404).json({ error: 'Question not found' });
+    }
+    
+    if (question.survey.conference.adminId !== req.adminId) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
     
     const updated = await prisma.question.update({
       where: { id: req.params.id },
@@ -101,8 +118,13 @@ router.put('/reorder', authenticateAdmin, async (req, res) => {
       include: { conference: { select: { adminId: true } } }
     });
     
-    if (!survey) return res.status(404).json({ error: 'Survey not found' });
-    if (survey.conference.adminId !== req.adminId) return res.status(403).json({ error: 'Access denied' });
+    if (!survey) {
+      return res.status(404).json({ error: 'Survey not found' });
+    }
+    
+    if (survey.conference.adminId !== req.adminId) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
     
     await Promise.all(
       questionIds.map((id, index) =>
@@ -118,15 +140,20 @@ router.put('/reorder', authenticateAdmin, async (req, res) => {
 });
 
 // Delete a question
-router.delete('/:id', authenticateAdmin, validateUUID('id'), handleValidationErrors, async (req, res) => {
+router.delete('/:id', authenticateAdmin, async (req, res) => {
   try {
     const question = await prisma.question.findUnique({
       where: { id: req.params.id },
       include: { survey: { include: { conference: { select: { adminId: true } } } } }
     });
     
-    if (!question) return res.status(404).json({ error: 'Question not found' });
-    if (question.survey.conference.adminId !== req.adminId) return res.status(403).json({ error: 'Access denied' });
+    if (!question) {
+      return res.status(404).json({ error: 'Question not found' });
+    }
+    
+    if (question.survey.conference.adminId !== req.adminId) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
     
     await prisma.question.delete({ where: { id: req.params.id } });
     
