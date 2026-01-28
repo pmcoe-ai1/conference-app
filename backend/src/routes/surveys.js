@@ -70,6 +70,10 @@ router.get('/conference/:conferenceId', authenticateAdmin, validateUUID('confere
  */
 router.get('/active', authenticateAttendee, async (req, res) => {
   try {
+    console.log('=== GET /surveys/active ===');
+    console.log('Attendee ID:', req.attendeeId);
+    console.log('Conference ID from token:', req.conferenceId);
+    
     const surveys = await prisma.survey.findMany({
       where: {
         conferenceId: req.conferenceId,
@@ -80,6 +84,15 @@ router.get('/active', authenticateAttendee, async (req, res) => {
       },
       orderBy: { sortOrder: 'asc' }
     });
+    
+    console.log('Found surveys:', surveys.length);
+    
+    // Debug: Check all surveys for this conference regardless of status
+    const allSurveys = await prisma.survey.findMany({
+      where: { conferenceId: req.conferenceId },
+      select: { id: true, title: true, status: true }
+    });
+    console.log('All surveys for conference:', allSurveys);
     
     // Get attendee's completed surveys
     const responses = await prisma.response.findMany({
