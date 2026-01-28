@@ -30,7 +30,7 @@ export default function ConferenceLanding() {
 
   useEffect(() => {
     if (isAuthenticated && isAttendee) {
-      navigate(`/c/${code}/survey`);
+      navigate(`/c/${code}/surveys`);
     }
   }, [isAuthenticated, isAttendee]);
 

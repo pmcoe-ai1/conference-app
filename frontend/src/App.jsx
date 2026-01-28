@@ -5,6 +5,7 @@ import { ToastProvider } from './context/ToastContext';
 
 // Attendee Pages
 import ConferenceLanding from './pages/attendee/ConferenceLanding';
+import SurveyHub from './pages/attendee/SurveyHub';
 import SurveyPage from './pages/attendee/SurveyPage';
 
 // Admin Pages
@@ -80,7 +81,12 @@ function AppRoutes() {
       
       {/* Attendee Routes */}
       <Route path="/c/:code" element={<ConferenceLanding />} />
-      <Route path="/c/:code/survey" element={
+      <Route path="/c/:code/surveys" element={
+        <AttendeeRoute>
+          <SurveyHub />
+        </AttendeeRoute>
+      } />
+      <Route path="/c/:code/survey/:surveyId" element={
         <AttendeeRoute>
           <SurveyPage />
         </AttendeeRoute>

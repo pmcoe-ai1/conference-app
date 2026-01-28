@@ -55,6 +55,7 @@ export const conferenceAPI = {
 export const surveyAPI = {
   listByConference: (conferenceId) => api.get(`/surveys/conference/${conferenceId}`),
   getActive: () => api.get('/surveys/active'),
+  getForAttendee: (id) => api.get(`/surveys/attendee/${id}`),
   create: (data) => api.post('/surveys', data),
   get: (id) => api.get(`/surveys/${id}`),
   update: (id, data) => api.put(`/surveys/${id}`, data),

@@ -66,12 +66,54 @@ router.get('/conference/:conferenceId', authenticateAdmin, validateUUID('confere
 
 /**
  * GET /surveys/active
- * Get active survey for attendee
+ * Get all active surveys for attendee's conference
  */
 router.get('/active', authenticateAttendee, async (req, res) => {
   try {
+    const surveys = await prisma.survey.findMany({
+      where: {
+        conferenceId: req.conferenceId,
+        status: 'active'
+      },
+      include: {
+        _count: { select: { questions: true } }
+      },
+      orderBy: { sortOrder: 'asc' }
+    });
+    
+    // Get attendee's completed surveys
+    const responses = await prisma.response.findMany({
+      where: { attendeeId: req.attendeeId },
+      select: { question: { select: { surveyId: true } } }
+    });
+    
+    const completedSurveyIds = new Set(
+      responses.map(r => r.question.surveyId)
+    );
+    
+    const surveysWithStatus = surveys.map(s => ({
+      ...s,
+      questionCount: s._count.questions,
+      isCompleted: completedSurveyIds.has(s.id),
+      _count: undefined
+    }));
+    
+    res.json(surveysWithStatus);
+  } catch (error) {
+    console.error('Get active surveys error:', error);
+    res.status(500).json({ error: 'Failed to fetch surveys.' });
+  }
+});
+
+/**
+ * GET /surveys/attendee/:id
+ * Get specific survey for attendee (with questions)
+ */
+router.get('/attendee/:id', authenticateAttendee, validateUUID('id'), handleValidationErrors, async (req, res) => {
+  try {
     const survey = await prisma.survey.findFirst({
       where: {
+        id: req.params.id,
         conferenceId: req.conferenceId,
         status: 'active'
       },
@@ -83,30 +125,27 @@ router.get('/active', authenticateAttendee, async (req, res) => {
     });
     
     if (!survey) {
-      return res.json({ survey: null, message: 'No active survey available.' });
+      return res.status(404).json({ error: 'Survey not found or not active.' });
     }
     
-    // Check if attendee already responded
+    // Check if already completed
     const existingResponse = await prisma.response.findFirst({
       where: {
         attendeeId: req.attendeeId,
-        question: {
-          surveyId: survey.id
-        }
+        question: { surveyId: survey.id }
       }
     });
     
     if (existingResponse) {
-      return res.json({ 
-        survey: null, 
-        alreadyCompleted: true,
-        message: 'You have already completed this survey.' 
+      return res.status(400).json({ 
+        error: 'You have already completed this survey.',
+        alreadyCompleted: true
       });
     }
     
-    res.json({ survey });
+    res.json(survey);
   } catch (error) {
-    console.error('Get active survey error:', error);
+    console.error('Get survey for attendee error:', error);
     res.status(500).json({ error: 'Failed to fetch survey.' });
   }
 });
@@ -231,10 +270,12 @@ router.put('/:id', authenticateAdmin, validateUUID('id'), validateSurvey, handle
  */
 router.put('/:id/activate', authenticateAdmin, validateUUID('id'), handleValidationErrors, async (req, res) => {
   try {
+    const { sendNotification = true } = req.body; // Option to skip email
+    
     const survey = await prisma.survey.findUnique({
       where: { id: req.params.id },
       include: {
-        conference: { select: { adminId: true, id: true } }
+        conference: { select: { adminId: true, id: true, name: true, urlCode: true } }
       }
     });
     
@@ -268,6 +309,48 @@ router.put('/:id/activate', authenticateAdmin, validateUUID('id'), handleValidat
       surveyId: survey.id,
       title: survey.title
     });
+    
+    // Send email notifications to all attendees (async, don't wait)
+    if (sendNotification) {
+      const { sendSurveyNotificationEmail } = require('../services/emailService');
+      const config = require('../config');
+      
+      // Get all attendees for this conference
+      const attendees = await prisma.attendee.findMany({
+        where: { 
+          conferenceId: survey.conferenceId,
+          status: { in: ['active', 'first_login'] }
+        },
+        select: { email: true, firstName: true }
+      });
+      
+      // Build survey URL
+      const baseUrl = config.frontendUrl || process.env.FRONTEND_URL || 'https://affectionate-courage-production.up.railway.app';
+      const surveyUrl = `${baseUrl}/c/${survey.conference.urlCode}/surveys`;
+      
+      // Send emails in background (don't block response)
+      setImmediate(async () => {
+        let sent = 0;
+        let failed = 0;
+        
+        for (const attendee of attendees) {
+          try {
+            await sendSurveyNotificationEmail(attendee.email, {
+              conferenceName: survey.conference.name,
+              surveyTitle: survey.title,
+              surveyUrl,
+              firstName: attendee.firstName
+            });
+            sent++;
+          } catch (err) {
+            console.error(`Failed to send notification to ${attendee.email}:`, err.message);
+            failed++;
+          }
+        }
+        
+        console.log(`Survey notification emails: ${sent} sent, ${failed} failed`);
+      });
+    }
     
     res.json(updated);
   } catch (error) {
