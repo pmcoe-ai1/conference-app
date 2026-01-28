@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, Outlet, useLocation } from 'react-router-dom';
-import { Home, FileText, BarChart3, Users, Presentation, LogOut, Menu, Plus, Calendar, QrCode, Download, Copy, Settings, ChevronDown, Loader2, Play, Pause, ExternalLink } from 'lucide-react';
+import { Home, FileText, BarChart3, Users, Presentation, LogOut, Menu, Plus, Calendar, QrCode, Download, Copy, Settings, ChevronDown, Loader2, Play, Pause, ExternalLink, Trash2, Edit, Power } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { conferenceAPI, surveyAPI, statisticsAPI, attendeeAPI, exportAPI } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
@@ -66,6 +66,12 @@ export function DashboardHome() {
   const [creating, setCreating] = useState(false);
   const [newConf, setNewConf] = useState({ name: '', urlCode: '', description: '', startDate: '', endDate: '' });
   const [summary, setSummary] = useState(null);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editConf, setEditConf] = useState(null);
+  const [updating, setUpdating] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteConf, setDeleteConf] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => { loadConferences(); }, []);
   useEffect(() => { if (selectedConference) loadSummary(); }, [selectedConference]);
@@ -115,6 +121,82 @@ export function DashboardHome() {
     } catch (err) { toast.error('Download failed'); }
   };
 
+  const openEditModal = (conf, e) => {
+    e?.stopPropagation();
+    setEditConf({
+      id: conf.id,
+      name: conf.name,
+      description: conf.description || '',
+      startDate: conf.startDate?.split('T')[0] || '',
+      endDate: conf.endDate?.split('T')[0] || '',
+      status: conf.status
+    });
+    setShowEditModal(true);
+  };
+
+  const handleUpdate = async () => {
+    if (!editConf.name || !editConf.startDate || !editConf.endDate) {
+      toast.error('Please fill required fields');
+      return;
+    }
+    setUpdating(true);
+    try {
+      await conferenceAPI.update(editConf.id, {
+        name: editConf.name,
+        description: editConf.description,
+        startDate: editConf.startDate,
+        endDate: editConf.endDate,
+        status: editConf.status
+      });
+      toast.success('Conference updated!');
+      setShowEditModal(false);
+      setEditConf(null);
+      loadConferences();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to update');
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const handleToggleStatus = async (conf, e) => {
+    e?.stopPropagation();
+    const newStatus = conf.status === 'active' ? 'draft' : 'active';
+    try {
+      await conferenceAPI.update(conf.id, { status: newStatus });
+      toast.success(`Conference ${newStatus === 'active' ? 'activated' : 'deactivated'}!`);
+      loadConferences();
+    } catch (err) {
+      toast.error('Failed to update status');
+    }
+  };
+
+  const openDeleteModal = (conf, e) => {
+    e?.stopPropagation();
+    setDeleteConf(conf);
+    setShowDeleteModal(true);
+  };
+
+  const handleDelete = async () => {
+    if (!deleteConf) return;
+    setDeleting(true);
+    try {
+      await conferenceAPI.delete(deleteConf.id);
+      toast.success('Conference deleted!');
+      setShowDeleteModal(false);
+      setDeleteConf(null);
+      if (selectedConference?.id === deleteConf.id) {
+        setSelectedConference(null);
+        setSummary(null);
+      }
+      loadConferences();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to delete');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   if (loading) return <div className="flex-1 flex items-center justify-center"><Spinner size="lg" /></div>;
 
   return (
@@ -128,9 +210,39 @@ export function DashboardHome() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
         {conferences.map((conf) => (
           <Card key={conf.id} className={`p-5 cursor-pointer transition-all ${selectedConference?.id === conf.id ? 'ring-2 ring-indigo-500 bg-indigo-600/20' : 'hover:bg-slate-750'}`} onClick={() => setSelectedConference(conf)}>
-            <div className="flex items-start justify-between mb-3"><h3 className="font-semibold text-white">{conf.name}</h3><StatusBadge status={conf.status} /></div>
+            <div className="flex items-start justify-between mb-3">
+              <h3 className="font-semibold text-white flex-1 pr-2">{conf.name}</h3>
+              <StatusBadge status={conf.status} />
+            </div>
             <p className="text-sm text-slate-400 mb-3 line-clamp-2">{conf.description}</p>
-            <div className="flex items-center gap-4 text-sm text-slate-500"><span className="flex items-center gap-1"><Calendar size={14} />{conf.startDate?.split('T')[0]}</span><span className="flex items-center gap-1"><Users size={14} />{conf.attendeeCount || 0}</span></div>
+            <div className="flex items-center gap-4 text-sm text-slate-500 mb-4">
+              <span className="flex items-center gap-1"><Calendar size={14} />{conf.startDate?.split('T')[0]}</span>
+              <span className="flex items-center gap-1"><Users size={14} />{conf.attendeeCount || 0}</span>
+            </div>
+            <div className="flex items-center gap-2 pt-3 border-t border-slate-700">
+              <button
+                onClick={(e) => openEditModal(conf, e)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-slate-700 text-slate-300 hover:bg-slate-600 transition-colors"
+              >
+                <Edit size={14} />Edit
+              </button>
+              <button
+                onClick={(e) => handleToggleStatus(conf, e)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                  conf.status === 'active'
+                    ? 'bg-amber-500/20 text-amber-400 hover:bg-amber-500/30'
+                    : 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30'
+                }`}
+              >
+                <Power size={14} />{conf.status === 'active' ? 'Deactivate' : 'Activate'}
+              </button>
+              <button
+                onClick={(e) => openDeleteModal(conf, e)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors"
+              >
+                <Trash2 size={14} />Delete
+              </button>
+            </div>
           </Card>
         ))}
         {conferences.length === 0 && <Card className="p-8 col-span-full"><EmptyState icon={QrCode} title="No conferences yet" description="Create your first conference to get started" action={<Button onClick={() => setShowCreateModal(true)}><Plus size={18} />Create Conference</Button>} /></Card>}
@@ -184,6 +296,61 @@ export function DashboardHome() {
             <Button onClick={handleCreate} loading={creating}>Create Conference</Button>
           </div>
         </div>
+      </Modal>
+
+      {/* Edit Modal */}
+      <Modal isOpen={showEditModal} onClose={() => { setShowEditModal(false); setEditConf(null); }} title="Edit Conference" size="lg">
+        {editConf && (
+          <div className="space-y-4">
+            <Input label="Conference Name *" value={editConf.name} onChange={(e) => setEditConf({ ...editConf, name: e.target.value })} placeholder="PMI Global Summit 2026" />
+            <Textarea label="Description" value={editConf.description} onChange={(e) => setEditConf({ ...editConf, description: e.target.value })} rows={3} placeholder="Conference description..." />
+            <div className="grid grid-cols-2 gap-4">
+              <Input label="Start Date *" type="date" value={editConf.startDate} onChange={(e) => setEditConf({ ...editConf, startDate: e.target.value })} />
+              <Input label="End Date *" type="date" value={editConf.endDate} onChange={(e) => setEditConf({ ...editConf, endDate: e.target.value })} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">Status</label>
+              <select
+                value={editConf.status}
+                onChange={(e) => setEditConf({ ...editConf, status: e.target.value })}
+                className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              >
+                <option value="draft">Draft</option>
+                <option value="active">Active</option>
+                <option value="archived">Archived</option>
+              </select>
+            </div>
+            <div className="flex justify-end gap-3 pt-4">
+              <Button variant="secondary" onClick={() => { setShowEditModal(false); setEditConf(null); }}>Cancel</Button>
+              <Button onClick={handleUpdate} loading={updating}>Save Changes</Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal isOpen={showDeleteModal} onClose={() => { setShowDeleteModal(false); setDeleteConf(null); }} title="Delete Conference" size="md">
+        {deleteConf && (
+          <div className="space-y-4">
+            <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-lg">
+              <p className="text-red-400 font-medium mb-2">⚠️ This action cannot be undone</p>
+              <p className="text-slate-400 text-sm">
+                Deleting "<span className="text-white font-medium">{deleteConf.name}</span>" will permanently remove:
+              </p>
+              <ul className="text-slate-400 text-sm mt-2 ml-4 list-disc">
+                <li>All surveys and questions</li>
+                <li>All attendee data and responses</li>
+                <li>All statistics and history</li>
+              </ul>
+            </div>
+            <div className="flex justify-end gap-3 pt-2">
+              <Button variant="secondary" onClick={() => { setShowDeleteModal(false); setDeleteConf(null); }}>Cancel</Button>
+              <Button onClick={handleDelete} loading={deleting} className="bg-red-600 hover:bg-red-700">
+                <Trash2 size={16} />Delete Conference
+              </Button>
+            </div>
+          </div>
+        )}
       </Modal>
     </div>
   );
