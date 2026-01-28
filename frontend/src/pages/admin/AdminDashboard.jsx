@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, Outlet, useLocation } from 'react-router-dom';
-import { Home, FileText, BarChart3, Users, Presentation, LogOut, Menu, Plus, Calendar, QrCode, Download, Copy, Settings, ChevronDown, Loader2, Play, Pause, ExternalLink } from 'lucide-react';
+import { Home, FileText, BarChart3, Users, Presentation, LogOut, Menu, Plus, Calendar, QrCode, Download, Copy, Settings, ChevronDown, Loader2, Play, Pause, ExternalLink, Trash2, Power, Archive } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { conferenceAPI, surveyAPI, statisticsAPI, attendeeAPI, exportAPI } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
@@ -66,6 +66,8 @@ export function DashboardHome() {
   const [creating, setCreating] = useState(false);
   const [newConf, setNewConf] = useState({ name: '', urlCode: '', description: '', startDate: '', endDate: '' });
   const [summary, setSummary] = useState(null);
+  const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const [actionLoading, setActionLoading] = useState(null);
 
   useEffect(() => { loadConferences(); }, []);
   useEffect(() => { if (selectedConference) loadSummary(); }, [selectedConference]);
@@ -104,6 +106,44 @@ export function DashboardHome() {
     toast.success('URL copied!');
   };
 
+  const handleToggleStatus = async (e, conf) => {
+    e.stopPropagation();
+    setActionLoading(conf.id);
+    try {
+      if (conf.status === 'active') {
+        await conferenceAPI.update(conf.id, { status: 'draft' });
+        toast.success('Conference deactivated');
+      } else {
+        await conferenceAPI.activate(conf.id);
+        toast.success('Conference activated');
+      }
+      loadConferences();
+    } catch (err) {
+      toast.error('Failed to update status');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteConfirm) return;
+    setActionLoading(deleteConfirm.id);
+    try {
+      await conferenceAPI.delete(deleteConfirm.id);
+      toast.success('Conference deleted');
+      setDeleteConfirm(null);
+      if (selectedConference?.id === deleteConfirm.id) {
+        setSelectedConference(null);
+        setSummary(null);
+      }
+      loadConferences();
+    } catch (err) {
+      toast.error('Failed to delete conference');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   const downloadQR = async (format) => {
     try {
       const response = format === 'png' ? await conferenceAPI.downloadQRPng(selectedConference.id) : await conferenceAPI.downloadQRSvg(selectedConference.id);
@@ -128,9 +168,41 @@ export function DashboardHome() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
         {conferences.map((conf) => (
           <Card key={conf.id} className={`p-5 cursor-pointer transition-all ${selectedConference?.id === conf.id ? 'ring-2 ring-indigo-500 bg-indigo-600/20' : 'hover:bg-slate-750'}`} onClick={() => setSelectedConference(conf)}>
-            <div className="flex items-start justify-between mb-3"><h3 className="font-semibold text-white">{conf.name}</h3><StatusBadge status={conf.status} /></div>
+            <div className="flex items-start justify-between mb-3">
+              <h3 className="font-semibold text-white flex-1 pr-2">{conf.name}</h3>
+              <StatusBadge status={conf.status} />
+            </div>
             <p className="text-sm text-slate-400 mb-3 line-clamp-2">{conf.description}</p>
-            <div className="flex items-center gap-4 text-sm text-slate-500"><span className="flex items-center gap-1"><Calendar size={14} />{conf.startDate?.split('T')[0]}</span><span className="flex items-center gap-1"><Users size={14} />{conf.attendeeCount || 0}</span></div>
+            <div className="flex items-center gap-4 text-sm text-slate-500 mb-3">
+              <span className="flex items-center gap-1"><Calendar size={14} />{conf.startDate?.split('T')[0]}</span>
+              <span className="flex items-center gap-1"><Users size={14} />{conf.attendeeCount || 0}</span>
+            </div>
+            <div className="flex items-center gap-2 pt-3 border-t border-slate-700">
+              <button
+                onClick={(e) => handleToggleStatus(e, conf)}
+                disabled={actionLoading === conf.id}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                  conf.status === 'active' 
+                    ? 'bg-amber-500/20 text-amber-400 hover:bg-amber-500/30' 
+                    : 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30'
+                } disabled:opacity-50`}
+              >
+                {actionLoading === conf.id ? (
+                  <Loader2 size={14} className="animate-spin" />
+                ) : conf.status === 'active' ? (
+                  <><Pause size={14} />Deactivate</>
+                ) : (
+                  <><Power size={14} />Activate</>
+                )}
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); setDeleteConfirm(conf); }}
+                disabled={actionLoading === conf.id}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors disabled:opacity-50"
+              >
+                <Trash2 size={14} />Delete
+              </button>
+            </div>
           </Card>
         ))}
         {conferences.length === 0 && <Card className="p-8 col-span-full"><EmptyState icon={QrCode} title="No conferences yet" description="Create your first conference to get started" action={<Button onClick={() => setShowCreateModal(true)}><Plus size={18} />Create Conference</Button>} /></Card>}
@@ -182,6 +254,33 @@ export function DashboardHome() {
           <div className="flex justify-end gap-3 pt-4">
             <Button variant="secondary" onClick={() => setShowCreateModal(false)}>Cancel</Button>
             <Button onClick={handleCreate} loading={creating}>Create Conference</Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal isOpen={!!deleteConfirm} onClose={() => setDeleteConfirm(null)} title="Delete Conference" size="md">
+        <div className="space-y-4">
+          <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-lg">
+            <p className="text-red-400 font-medium mb-2">⚠️ This action cannot be undone</p>
+            <p className="text-slate-400 text-sm">
+              Deleting "<span className="text-white">{deleteConfirm?.name}</span>" will permanently remove:
+            </p>
+            <ul className="text-slate-400 text-sm mt-2 ml-4 list-disc">
+              <li>All surveys and questions</li>
+              <li>All attendee data and responses</li>
+              <li>All statistics and history</li>
+            </ul>
+          </div>
+          <div className="flex justify-end gap-3 pt-2">
+            <Button variant="secondary" onClick={() => setDeleteConfirm(null)}>Cancel</Button>
+            <Button 
+              onClick={handleDelete} 
+              loading={actionLoading === deleteConfirm?.id}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              <Trash2 size={16} />Delete Conference
+            </Button>
           </div>
         </div>
       </Modal>
