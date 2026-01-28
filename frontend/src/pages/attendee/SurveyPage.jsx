@@ -6,7 +6,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 
 export default function SurveyPage() {
-  const { code, surveyId } = useParams();
+  const { code } = useParams();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const toast = useToast();
@@ -21,22 +21,20 @@ export default function SurveyPage() {
   const [noSurvey, setNoSurvey] = useState(false);
   const [alreadyCompleted, setAlreadyCompleted] = useState(false);
 
-  useEffect(() => { loadSurvey(); }, [surveyId]);
+  useEffect(() => { loadSurvey(); }, []);
 
   const loadSurvey = async () => {
     try {
-      // Load specific survey by ID for attendee
-      const { data } = await surveyAPI.getForAttendee(surveyId);
-      setSurvey(data);
-      setQuestions(data.questions || []);
-    } catch (err) {
-      if (err.response?.status === 404) {
-        setNoSurvey(true);
-      } else if (err.response?.data?.alreadyCompleted) {
-        setAlreadyCompleted(true);
+      const { data } = await surveyAPI.getActive();
+      if (!data.survey) {
+        if (data.alreadyCompleted) setAlreadyCompleted(true);
+        else setNoSurvey(true);
       } else {
-        toast.error('Failed to load survey');
+        setSurvey(data.survey);
+        setQuestions(data.survey.questions || []);
       }
+    } catch (err) {
+      toast.error('Failed to load survey');
     } finally {
       setLoading(false);
     }
@@ -96,10 +94,7 @@ export default function SurveyPage() {
           <div className="inline-flex items-center justify-center w-24 h-24 bg-white/20 rounded-full mb-6 animate-bounce"><Check className="w-12 h-12 text-white" /></div>
           <h1 className="text-3xl font-bold text-white mb-3">Thank You!</h1>
           <p className="text-emerald-200 mb-8">Your responses have been submitted successfully.</p>
-          <div className="space-y-3">
-            <button onClick={() => navigate(`/c/${code}/surveys`)} className="w-full px-6 py-3 bg-white text-emerald-900 font-semibold rounded-xl hover:bg-emerald-100 transition-colors">Back to Survey Hub</button>
-            <button onClick={() => { logout(); navigate(`/c/${code}`); }} className="w-full px-6 py-3 bg-white/20 text-white rounded-xl hover:bg-white/30 transition-colors">Sign Out</button>
-          </div>
+          <button onClick={() => { logout(); navigate(`/c/${code}`); }} className="px-6 py-3 bg-white/20 text-white rounded-xl hover:bg-white/30 transition-colors">Sign Out</button>
         </div>
       </div>
     );
@@ -110,12 +105,9 @@ export default function SurveyPage() {
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
         <div className="text-center max-w-md">
           <div className="inline-flex items-center justify-center w-20 h-20 bg-slate-700/50 rounded-2xl mb-6"><Clock className="w-10 h-10 text-slate-400" /></div>
-          <h1 className="text-2xl font-bold text-white mb-3">{alreadyCompleted ? 'Already Completed' : 'Survey Not Available'}</h1>
-          <p className="text-slate-400 mb-6">{alreadyCompleted ? 'You have already completed this survey. Thank you for your feedback!' : 'This survey is no longer active. Please check the survey hub for available surveys.'}</p>
-          <div className="space-y-3">
-            <button onClick={() => navigate(`/c/${code}/surveys`)} className="w-full px-6 py-3 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-colors">Back to Survey Hub</button>
-            <button onClick={() => { logout(); navigate(`/c/${code}`); }} className="w-full px-6 py-3 bg-slate-700 text-white rounded-xl hover:bg-slate-600 transition-colors">Sign Out</button>
-          </div>
+          <h1 className="text-2xl font-bold text-white mb-3">{alreadyCompleted ? 'Already Completed' : 'No Active Survey'}</h1>
+          <p className="text-slate-400 mb-6">{alreadyCompleted ? 'You have already completed this survey. Thank you for your feedback!' : 'There\'s no survey available at the moment. Please check back later.'}</p>
+          <button onClick={() => { logout(); navigate(`/c/${code}`); }} className="px-6 py-3 bg-slate-700 text-white rounded-xl hover:bg-slate-600 transition-colors">Sign Out</button>
         </div>
       </div>
     );

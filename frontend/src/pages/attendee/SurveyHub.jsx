@@ -22,15 +22,16 @@ export default function SurveyHub() {
 
   const loadData = async () => {
     try {
-      const { data } = await surveyAPI.getActive();
+      const [surveysRes, responsesRes] = await Promise.all([
+        surveyAPI.getActive(),
+        responseAPI.getMyResponses()
+      ]);
       
-      // Handle both array and single object responses
-      const surveyList = Array.isArray(data) ? data : (data ? [data] : []);
-      setSurveys(surveyList);
+      setSurveys(surveysRes.data);
       
-      // Build completed set from isCompleted flag
+      // Get unique survey IDs from responses
       const completed = new Set(
-        surveyList.filter(s => s.isCompleted).map(s => s.id)
+        responsesRes.data.map(r => r.question?.survey?.id).filter(Boolean)
       );
       setCompletedSurveyIds(completed);
     } catch (err) {
